@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plex Þáttur Eftirlit</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #090b0f;
+  --surface: #101318;
+  --card: #13171f;
+  --border: #1e2435;
+  --border-light: #252d40;
+  --plex: #e5a00d;
+  --plex-dim: #7a5505;
+  --green: #27ae60;
+  --green-bright: #2ecc71;
+  --red: #e74c3c;
+  --blue: #3d8ef0;
+  --blue-bright: #5aa9ff;
+  --purple: #8b5cf6;
+  --text: #dde1ed;
+  --text-dim: #8892aa;
+  --muted: #4a5268;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body.modal-open { overflow: hidden; }
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 40%, rgba(229,160,13,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 85% 15%, rgba(61,142,240,0.04) 0%, transparent 55%);
+  pointer-events: none; z-index: 0;
+}
+
+/* HEADER */
+header {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(9,11,15,0.94);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2.5rem;
+  display: flex; align-items: center; gap: 1.5rem;
+  height: 64px;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 1.15rem;
+  color: var(--plex); letter-spacing: 0.04em;
+  display: flex; align-items: center; gap: 0.6rem;
+  white-space: nowrap;
+}
+.header-right {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 1rem;
+  font-size: 0.72rem; color: var(--muted);
+}
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green-bright);
+  box-shadow: 0 0 8px var(--green-bright);
+  animation: blink 2.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+main { position: relative; z-index: 1; max-width: 1500px; margin: 0 auto; padding: 2rem 2.5rem; }
+
+/* SETUP */
+#setup-panel {
+  max-width: 540px; margin: 5rem auto;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 2.8rem;
+}
+.setup-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 1.6rem; color: var(--plex); margin-bottom: 0.4rem;
+}
+.setup-sub { font-size: 0.74rem; color: var(--text-dim); margin-bottom: 2rem; line-height: 1.7; }
+.field { margin-bottom: 1.3rem; }
+label { display: block; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.45rem; }
+input {
+  width: 100%; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.7rem 1rem; color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 0.82rem;
+  outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus { border-color: var(--plex); box-shadow: 0 0 0 3px rgba(229,160,13,0.1); }
+input::placeholder { color: var(--muted); }
+.hint { font-size: 0.64rem; color: var(--muted); margin-top: 0.35rem; line-height: 1.6; }
+.hint a { color: var(--blue-bright); text-decoration: none; }
+.btn-primary {
+  width: 100%; background: var(--plex); color: #000;
+  border: none; border-radius: 8px;
+  padding: 0.8rem 1.5rem;
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.9rem;
+  cursor: pointer; transition: opacity 0.2s, transform 0.1s; margin-top: 0.5rem;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:active { transform: scale(0.98); }
+.btn-ghost {
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.4rem 1rem; font-family: 'DM Mono', monospace;
+  font-size: 0.72rem; cursor: pointer; transition: color 0.2s, border-color 0.2s;
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--border-light); }
+.error-box {
+  background: rgba(231,76,60,0.1); border: 1px solid rgba(231,76,60,0.3);
+  border-radius: 8px; padding: 0.8rem 1rem;
+  font-size: 0.74rem; color: var(--red); margin-top: 1rem; display: none;
+}
+
+/* DASHBOARD */
+#dashboard { display: none; }
+.stats-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;
+}
+@media(max-width:800px) { .stats-row { grid-template-columns: repeat(2,1fr); } }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.4rem 1.6rem;
+}
+.stat-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.stat-val {
+  font-family: 'Syne', sans-serif; font-size: 2.4rem;
+  font-weight: 800; line-height: 1.1; margin-top: 0.35rem;
+}
+.stat-val.gold { color: var(--plex); }
+.stat-val.green { color: var(--green-bright); }
+.stat-val.red { color: var(--red); }
+.stat-val.blue { color: var(--blue-bright); }
+
+.controls {
+  display: flex; gap: 0.6rem; margin-bottom: 1.8rem;
+  flex-wrap: wrap; align-items: center;
+}
+.controls-row2 {
+  display: flex; gap: 0.6rem; margin-bottom: 1.8rem;
+  align-items: center; flex-wrap: wrap;
+}
+.filter-btn {
+  background: var(--surface); color: var(--muted);
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 0.45rem 1rem;
+  font-family: 'DM Mono', monospace; font-size: 0.72rem;
+  cursor: pointer; transition: all 0.18s;
+}
+.filter-btn:hover { color: var(--text); border-color: var(--border-light); }
+.filter-btn.active { background: var(--plex); color: #000; border-color: var(--plex); font-weight: 500; }
+#search-box { margin-left: auto; width: 220px; padding: 0.45rem 0.9rem; font-size: 0.76rem; }
+
+.sort-wrap {
+  display: flex; align-items: center; gap: 0.35rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.25rem 0.5rem;
+}
+.sort-label { font-size: 0.62rem; color: var(--muted); margin-right: 0.2rem; white-space: nowrap; }
+.sort-btn {
+  background: transparent; color: var(--muted);
+  border: none; border-radius: 5px;
+  padding: 0.3rem 0.55rem;
+  font-family: 'DM Mono', monospace; font-size: 0.68rem;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.sort-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.sort-btn.active { background: var(--plex); color: #000; font-weight: 600; }
+
+/* GRID */
+.shows-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.2rem;
+}
+
+/* CARD */
+.show-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; overflow: hidden; cursor: pointer;
+  transition: border-color 0.2s, transform 0.18s, box-shadow 0.2s;
+  display: flex; flex-direction: column;
+}
+.show-card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.show-card.has-missing { border-color: rgba(231,76,60,0.3); }
+.show-card.has-missing:hover { border-color: rgba(231,76,60,0.6); box-shadow: 0 12px 40px rgba(231,76,60,0.1); }
+.show-card.has-upcoming { border-color: rgba(61,142,240,0.3); }
+.show-card.has-upcoming:hover { border-color: rgba(61,142,240,0.6); box-shadow: 0 12px 40px rgba(61,142,240,0.1); }
+
+.card-banner {
+  position: relative; height: 130px; overflow: hidden; flex-shrink: 0;
+  background: var(--surface);
+}
+.card-banner-img {
+  width: 100%; height: 100%; object-fit: cover;
+  filter: brightness(0.45) saturate(0.7);
+  transition: filter 0.3s;
+}
+.show-card:hover .card-banner-img { filter: brightness(0.6) saturate(1); }
+.card-banner-grad {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, var(--card) 0%, transparent 60%);
+}
+.card-poster {
+  position: absolute; bottom: -22px; left: 1rem;
+  width: 58px; height: 86px;
+  border-radius: 7px; object-fit: cover;
+  border: 2px solid var(--border-light);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+  background: var(--surface);
+}
+.card-poster-ph {
+  position: absolute; bottom: -22px; left: 1rem;
+  width: 58px; height: 86px; border-radius: 7px;
+  border: 2px solid var(--border-light); background: var(--surface);
+  display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+}
+.banner-badges {
+  position: absolute; top: 0.7rem; right: 0.7rem;
+  display: flex; gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end;
+}
+.card-body {
+  padding: 1.8rem 1rem 0.6rem 5.2rem;
+}
+.card-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 0.95rem; line-height: 1.25; margin-bottom: 0.2rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.card-meta { font-size: 0.68rem; color: var(--text-dim); }
+
+/* Season bars */
+.season-bars { display: flex; flex-direction: column; gap: 0.32rem; padding: 0.8rem 1rem 0.8rem; }
+.sbar { display: flex; align-items: center; gap: 0.6rem; font-size: 0.67rem; }
+.sbar-label { color: var(--muted); width: 60px; flex-shrink: 0; }
+.sbar-track { flex: 1; height: 5px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+.sbar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+.sbar-fill.full { background: var(--green); }
+.sbar-fill.partial { background: var(--plex); }
+.sbar-fill.empty { background: var(--red); }
+.sbar-count { color: var(--muted); min-width: 42px; text-align: right; }
+
+/* Pills */
+.up-pill {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0 1rem 0.8rem;
+  padding: 0.55rem 0.8rem;
+  background: rgba(61,142,240,0.08);
+  border: 1px solid rgba(61,142,240,0.2);
+  border-radius: 8px; font-size: 0.67rem; color: var(--blue-bright);
+}
+.up-pill .upc { font-weight: 500; flex-shrink: 0; }
+.up-pill .upn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.up-pill .upd { flex-shrink: 0; opacity: 0.7; }
+
+.miss-pill {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0 1rem 0.8rem; padding: 0.5rem 0.8rem;
+  background: rgba(231,76,60,0.07);
+  border: 1px solid rgba(231,76,60,0.18);
+  border-radius: 8px; font-size: 0.67rem; color: var(--red);
+}
+
+/* Badges */
+.badge {
+  font-size: 0.6rem; padding: 0.22rem 0.55rem;
+  border-radius: 5px; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap;
+}
+.badge.complete { background: rgba(39,174,96,0.15); color: var(--green-bright); border: 1px solid rgba(39,174,96,0.3); }
+.badge.missing  { background: rgba(231,76,60,0.15); color: var(--red); border: 1px solid rgba(231,76,60,0.3); }
+.badge.upcoming { background: rgba(61,142,240,0.15); color: var(--blue-bright); border: 1px solid rgba(61,142,240,0.3); }
+.badge.ended    { background: rgba(74,82,104,0.2); color: var(--muted); border: 1px solid var(--border); }
+.badge.cont     { background: rgba(139,92,246,0.15); color: var(--purple); border: 1px solid rgba(139,92,246,0.3); }
+
+/* MODAL */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(8px);
+  display: none; align-items: flex-start; justify-content: center;
+  padding: 2rem 1rem; overflow-y: auto;
+}
+.modal-backdrop.open { display: flex; }
+
+.modal {
+  background: var(--card);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  width: 100%; max-width: 800px;
+  position: relative; overflow: hidden;
+  animation: mIn 0.28s cubic-bezier(0.34,1.4,0.64,1) both;
+  flex-shrink: 0; margin: auto;
+}
+@keyframes mIn {
+  from { opacity:0; transform: scale(0.9) translateY(24px); }
+  to   { opacity:1; transform: scale(1) translateY(0); }
+}
+
+.modal-close-btn {
+  position: absolute; top: 1rem; right: 1rem; z-index: 10;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(0,0,0,0.55); border: 1px solid var(--border);
+  color: var(--text-dim); font-size: 1rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s; font-family: monospace;
+}
+.modal-close-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+.modal-hero {
+  position: relative; height: 280px; overflow: hidden; background: var(--surface);
+}
+.modal-hero-img {
+  width: 100%; height: 100%; object-fit: cover;
+  filter: brightness(0.4) saturate(0.7);
+}
+.modal-hero-grad {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(9,11,15,0.2) 0%, var(--card) 100%);
+}
+.modal-hero-content {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 1.5rem 2rem;
+  display: flex; align-items: flex-end; gap: 1.5rem;
+}
+.modal-poster {
+  width: 96px; height: 143px; border-radius: 10px;
+  object-fit: cover; border: 2px solid var(--border-light);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+  background: var(--surface); flex-shrink: 0;
+}
+.modal-poster-ph {
+  width: 96px; height: 143px; border-radius: 10px;
+  border: 2px solid var(--border-light); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5rem; flex-shrink: 0;
+}
+.modal-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 1.8rem; line-height: 1.15;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.9); margin-bottom: 0.35rem;
+}
+.modal-meta-line { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.7rem; }
+.modal-badges-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+.modal-body { padding: 2rem; }
+.section-head {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 0.75rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.12em;
+  margin-bottom: 0.9rem;
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.section-head::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* Next ep box */
+.nep-box {
+  background: rgba(61,142,240,0.07);
+  border: 1px solid rgba(61,142,240,0.22);
+  border-radius: 12px; padding: 1.2rem 1.5rem; margin-bottom: 2rem;
+}
+.nep-top { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 0.6rem; }
+.nep-code {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem;
+  color: var(--blue-bright);
+  background: rgba(61,142,240,0.15); border-radius: 6px; padding: 0.3rem 0.7rem;
+}
+.nep-name { font-size: 0.88rem; color: var(--text); }
+.nep-bottom { display: flex; align-items: baseline; gap: 1rem; }
+.nep-countdown {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 1.5rem; color: var(--blue-bright);
+}
+.nep-date { font-size: 0.7rem; color: var(--text-dim); }
+.nep-overview { font-size: 0.73rem; color: var(--text-dim); margin-top: 0.8rem; line-height: 1.65; }
+
+/* Season table */
+.stbl { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+.stbl th {
+  font-size: 0.63rem; color: var(--muted); text-align: left;
+  padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--border);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.stbl td { padding: 0.65rem 0.7rem; font-size: 0.78rem; border-bottom: 1px solid rgba(30,36,53,0.5); vertical-align: middle; }
+.stbl tr:last-child td { border-bottom: none; }
+.stbl tr:hover td { background: rgba(255,255,255,0.02); }
+.stbl-snum { font-family:'Syne',sans-serif; font-weight:700; }
+.stbl-bar-cell { width: 38%; }
+.stbl-bar { height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+.stbl-bar-fill { height: 100%; border-radius: 3px; }
+.stbl-bar-fill.full { background: var(--green); }
+.stbl-bar-fill.partial { background: var(--plex); }
+.stbl-bar-fill.empty { background: var(--red); }
+.stbl-count { color: var(--text-dim); white-space: nowrap; }
+.stbl-status { text-align: right; }
+
+/* Missing grid */
+.miss-grid {
+  display: flex; flex-wrap: wrap; gap: 0.4rem;
+  padding: 1rem;
+  background: rgba(231,76,60,0.05);
+  border: 1px solid rgba(231,76,60,0.14);
+  border-radius: 10px; margin-bottom: 2rem;
+}
+.miss-chip {
+  background: rgba(231,76,60,0.12);
+  border: 1px solid rgba(231,76,60,0.25);
+  color: var(--red); border-radius: 5px;
+  padding: 0.25rem 0.55rem; font-size: 0.68rem;
+}
+
+/* LOADING */
+#loading-overlay {
+  position: fixed; inset: 0; background: var(--bg);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center; z-index: 300;
+}
+.spinner {
+  width: 44px; height: 44px;
+  border: 3px solid var(--border); border-top-color: var(--plex);
+  border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 1.5rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-ttl { font-family:'Syne',sans-serif; font-weight:700; font-size:0.95rem; color:var(--text); }
+.loading-sub-txt { font-size:0.68rem; color:var(--plex-dim); margin-top:0.3rem; max-width:300px; text-align:center; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">▶ PLEX EFTIRLIT</div>
+  <div class="header-right" id="header-right" style="display:none">
+    <span class="live-dot"></span>
+    <span id="header-server" style="color:var(--text-dim)"></span>
+    <button class="btn-ghost" onclick="logout()">Útskrá</button>
+  </div>
+</header>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-ttl" id="loading-ttl">Hleð...</div>
+  <div class="loading-sub-txt" id="loading-sub"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="backdropClick(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close-btn" onclick="closeModal()">✕</button>
+    <div class="modal-hero">
+      <img class="modal-hero-img" id="m-hero-img" src="" alt="" onerror="this.style.display='none'">
+      <div class="modal-hero-grad"></div>
+      <div class="modal-hero-content">
+        <div id="m-poster"></div>
+        <div style="flex:1">
+          <div class="modal-title" id="m-title"></div>
+          <div class="modal-meta-line" id="m-meta"></div>
+          <div class="modal-badges-row" id="m-badges"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-body" id="m-body"></div>
+  </div>
+</div>
+
+<main>
+  <div id="setup-panel">
+    <div class="setup-title">Plex Eftirlit</div>
+    <p class="setup-sub">Tengdu Plex server þinn og TMDB til að sjá yfirlit yfir þætti þína — hvort vantar, og hvenær næsti þáttur kemur.</p>
+    <div class="field">
+      <label>Plex Server URL</label>
+      <input id="plex-url" type="text" placeholder="http://192.168.1.x:32400">
+      <div class="hint">IP tala eða hostname á Plex server þínum (port 32400)</div>
+    </div>
+    <div class="field">
+      <label>Plex Token</label>
+      <input id="plex-token" type="password" placeholder="xxxxxxxxxxxxxxxxxxxx">
+      <div class="hint">Plex Web → þáttur → ··· → Get Info → View XML → token er í URL · <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank">Leiðbeiningar</a></div>
+    </div>
+    <div class="field">
+      <label>TMDB API Lykill</label>
+      <input id="tmdb-key" type="password" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+      <div class="hint">Ókeypis á <a href="https://www.themoviedb.org/settings/api" target="_blank">themoviedb.org</a> — þarf til að sækja lýsingar og næstu þætti</div>
+    </div>
+    <button class="btn-primary" onclick="connect()">Tengjast</button>
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <div id="dashboard">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">Seríur á Plex</div><div class="stat-val gold" id="s-total">—</div></div>
+      <div class="stat-card"><div class="stat-label">Komplítar</div><div class="stat-val green" id="s-complete">—</div></div>
+      <div class="stat-card"><div class="stat-label">Vantar þætti</div><div class="stat-val red" id="s-missing">—</div></div>
+      <div class="stat-card"><div class="stat-label">Bráðum</div><div class="stat-val blue" id="s-upcoming">—</div></div>
+    </div>
+    <div class="controls">
+      <button class="filter-btn active" onclick="setFilter('all',this)">Allt</button>
+      <button class="filter-btn" onclick="setFilter('missing',this)">Vantar þætti</button>
+      <button class="filter-btn" onclick="setFilter('upcoming',this)">Væntanlegt</button>
+      <button class="filter-btn" onclick="setFilter('complete',this)">Komplítar</button>
+      <button class="filter-btn" onclick="setFilter('ended',this)">Lokið</button>
+      <input id="search-box" type="text" placeholder="🔍 Leita..." oninput="searchShows(this.value)">
+    </div>
+    <div class="controls-row2">
+      <div class="sort-wrap">
+        <span class="sort-label">Raða:</span>
+        <button class="sort-btn active" onclick="setSort('smart',this)" title="Vantar þætti fyrst, svo væntanlegt">⚡ Sjálfgefið</button>
+        <button class="sort-btn" onclick="setSort('name',this)">A–Ö</button>
+        <button class="sort-btn" onclick="setSort('name-desc',this)">Ö–A</button>
+        <button class="sort-btn" onclick="setSort('upcoming',this)">📅 Næsti þáttur</button>
+        <button class="sort-btn" onclick="setSort('missing',this)">⚠ Vantar mest</button>
+        <button class="sort-btn" onclick="setSort('rating',this)">★ Einkunn</button>
+      </div>
+    </div>
+    <div class="shows-grid" id="shows-grid"></div>
+  </div>
+</main>
+
+<script>
+let allShows = [], currentFilter = 'all', searchTerm = '', currentSort = 'smart';
+let plexUrl = '', plexToken = '', tmdbKey = '';
+
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    const c = JSON.parse(localStorage.getItem('plex-cfg') || '{}');
+    if (c.url) document.getElementById('plex-url').value = c.url;
+    if (c.token) document.getElementById('plex-token').value = c.token;
+    if (c.tmdb) document.getElementById('tmdb-key').value = c.tmdb;
+  } catch(e) {}
+});
+
+function logout() { localStorage.removeItem('plex-cfg'); location.reload(); }
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.style.display = 'block'; el.textContent = msg;
+}
+
+function setLoading(show, ttl = '', sub = '') {
+  document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+  document.getElementById('loading-ttl').textContent = ttl;
+  document.getElementById('loading-sub').textContent = sub;
+}
+
+async function plexGet(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const r = await fetch(`${plexUrl}${path}${sep}X-Plex-Token=${plexToken}&X-Plex-Client-Identifier=plexeftirlit`, {
+    headers: { Accept: 'application/json' }
+  });
+  if (!r.ok) throw new Error(`Plex ${r.status} á ${path}`);
+  return r.json();
+}
+
+async function tmdbGet(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const r = await fetch(`https://api.themoviedb.org/3${path}${sep}api_key=${tmdbKey}&language=en-US`);
+  if (!r.ok) throw new Error(`TMDB ${r.status}`);
+  return r.json();
+}
+
+async function connect() {
+  plexUrl = document.getElementById('plex-url').value.trim().replace(/\/$/, '');
+  plexToken = document.getElementById('plex-token').value.trim();
+  tmdbKey = document.getElementById('tmdb-key').value.trim();
+  if (!plexUrl || !plexToken) { showError('Vantar Plex URL og token'); return; }
+  document.getElementById('error-box').style.display = 'none';
+  setLoading(true, 'Tengist Plex...', plexUrl);
+  try {
+    const id = await plexGet('/identity');
+    const srvName = id.MediaContainer?.friendlyName || 'Plex Server';
+    localStorage.setItem('plex-cfg', JSON.stringify({ url: plexUrl, token: plexToken, tmdb: tmdbKey }));
+
+    setLoading(true, 'Sæki bókasafnslista...', '');
+    const libs = await plexGet('/library/sections');
+    const tvSecs = (libs.MediaContainer?.Directory || []).filter(s => s.type === 'show');
+    if (!tvSecs.length) throw new Error('Ekkert sjónvarps-bókasafn fannst í Plex');
+
+    let raw = [];
+    for (const sec of tvSecs) {
+      setLoading(true, `Sæki „${sec.title}"...`, '');
+      const d = await plexGet(`/library/sections/${sec.key}/all`);
+      raw = raw.concat(d.MediaContainer?.Metadata || []);
+    }
+
+    setLoading(true, `Sæki gögn um ${raw.length} seríur...`, 'Þetta tekur smá stund...');
+    allShows = await enrichAll(raw);
+
+    const nm = allShows.filter(s => s.missingEpisodes?.length > 0).length;
+    const nu = allShows.filter(s => s.nextEpisode).length;
+    const nc = allShows.filter(s => !s.missingEpisodes?.length && !s.nextEpisode && s.status === 'Ended').length;
+
+    document.getElementById('s-total').textContent = allShows.length;
+    document.getElementById('s-complete').textContent = nc;
+    document.getElementById('s-missing').textContent = nm;
+    document.getElementById('s-upcoming').textContent = nu;
+    document.getElementById('header-server').textContent = srvName;
+    document.getElementById('header-right').style.display = 'flex';
+
+    setLoading(false);
+    document.getElementById('setup-panel').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    renderShows();
+  } catch(e) {
+    setLoading(false);
+    showError('Villa: ' + e.message);
+  }
+}
+
+async function enrichAll(shows) {
+  const out = [];
+  for (let i = 0; i < shows.length; i++) {
+    if (i % 3 === 0) document.getElementById('loading-sub').textContent = `${i}/${shows.length} — ${shows[i].title}`;
+    try { out.push(await enrichOne(shows[i])); }
+    catch(e) { out.push({ title: shows[i].title, thumb: shows[i].thumb, art: shows[i].art, plexKey: shows[i].ratingKey, seasonRows: [], missingEpisodes: [], status: '—', error: true }); }
+  }
+  return out;
+}
+
+async function enrichOne(show) {
+  const sd = await plexGet(`/library/metadata/${show.ratingKey}/children`);
+  const plexSeasons = (sd.MediaContainer?.Metadata || []).filter(s => s.type === 'season' && s.index > 0);
+
+  const plexMap = {};
+  for (const s of plexSeasons) {
+    const ed = await plexGet(`/library/metadata/${s.ratingKey}/children`);
+    plexMap[s.index] = (ed.MediaContainer?.Metadata || []).length;
+  }
+
+  let tmdbId=null, tmdbShow=null, tmdbSeasons=[], status='—', nextEpisode=null;
+  let overview='', tmdbPoster=null, tmdbBackdrop=null, network='', genres=[], rating=null;
+
+  if (tmdbKey) {
+    try {
+      const yr = show.year ? `&first_air_date_year=${show.year}` : '';
+      const sr = await tmdbGet(`/search/tv?query=${encodeURIComponent(show.title)}${yr}`);
+      if (sr.results?.length) {
+        tmdbId = sr.results[0].id;
+        tmdbShow = await tmdbGet(`/tv/${tmdbId}`);
+        status = tmdbShow.status || '—';
+        nextEpisode = tmdbShow.next_episode_to_air || null;
+        overview = tmdbShow.overview || '';
+        tmdbPoster = tmdbShow.poster_path ? `https://image.tmdb.org/t/p/w300${tmdbShow.poster_path}` : null;
+        tmdbBackdrop = tmdbShow.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdbShow.backdrop_path}` : null;
+        tmdbSeasons = (tmdbShow.seasons || []).filter(s => s.season_number > 0);
+        network = tmdbShow.networks?.[0]?.name || '';
+        genres = tmdbShow.genres?.map(g => g.name).slice(0,3) || [];
+        rating = tmdbShow.vote_average ? tmdbShow.vote_average.toFixed(1) : null;
+      }
+    } catch(e) {}
+  }
+
+  const missingEpisodes = [], seasonRows = [];
+
+  if (tmdbSeasons.length) {
+    for (const ts of tmdbSeasons) {
+      const sn = ts.season_number, total = ts.episode_count;
+      const have = plexMap[sn] || 0;
+      const isPast = !nextEpisode || sn < (nextEpisode.season_number || 999);
+      const missing = isPast ? Math.max(0, total - have) : 0;
+      if (missing > 0) {
+        for (let e = have+1; e <= total; e++)
+          missingEpisodes.push(`S${String(sn).padStart(2,'0')}E${String(e).padStart(2,'0')}`);
+      }
+      seasonRows.push({ season: sn, have, total, missing: isPast ? missing : 0 });
+    }
+  } else {
+    for (const [sn, have] of Object.entries(plexMap))
+      seasonRows.push({ season: parseInt(sn), have, total: have, missing: 0 });
+  }
+
+  return {
+    title: show.title, year: show.year,
+    thumb: show.thumb, art: show.art, plexKey: show.ratingKey,
+    tmdbId, status, seasonRows, missingEpisodes, nextEpisode,
+    overview, tmdbPoster, tmdbBackdrop, network, genres, rating
+  };
+}
+
+/* FILTER */
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderShows();
+}
+function setSort(s, btn) {
+  currentSort = s;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderShows();
+}
+function searchShows(v) { searchTerm = v.toLowerCase(); renderShows(); }
+
+function renderShows() {
+  let shows = allShows;
+  if (searchTerm) shows = shows.filter(s => s.title.toLowerCase().includes(searchTerm));
+  if (currentFilter === 'missing')   shows = shows.filter(s => s.missingEpisodes?.length > 0);
+  else if (currentFilter === 'upcoming') shows = shows.filter(s => s.nextEpisode);
+  else if (currentFilter === 'complete') shows = shows.filter(s => !s.missingEpisodes?.length && s.status === 'Ended');
+  else if (currentFilter === 'ended')    shows = shows.filter(s => s.status === 'Ended' || s.status === 'Canceled');
+
+  shows = [...shows].sort((a, b) => {
+    switch (currentSort) {
+      case 'name':
+        return a.title.localeCompare(b.title, 'is');
+      case 'name-desc':
+        return b.title.localeCompare(a.title, 'is');
+      case 'upcoming': {
+        const ad = a.nextEpisode?.air_date ? new Date(a.nextEpisode.air_date) : null;
+        const bd = b.nextEpisode?.air_date ? new Date(b.nextEpisode.air_date) : null;
+        if (ad && bd) return ad - bd;
+        if (ad) return -1;
+        if (bd) return 1;
+        return a.title.localeCompare(b.title, 'is');
+      }
+      case 'missing': {
+        const am = a.missingEpisodes?.length || 0, bm = b.missingEpisodes?.length || 0;
+        if (am !== bm) return bm - am;
+        return a.title.localeCompare(b.title, 'is');
+      }
+      case 'rating': {
+        const ar = parseFloat(a.rating) || 0, br = parseFloat(b.rating) || 0;
+        if (ar !== br) return br - ar;
+        return a.title.localeCompare(b.title, 'is');
+      }
+      default: { // smart
+        const am = a.missingEpisodes?.length || 0, bm = b.missingEpisodes?.length || 0;
+        if (am !== bm) return bm - am;
+        if (a.nextEpisode && !b.nextEpisode) return -1;
+        if (!a.nextEpisode && b.nextEpisode) return 1;
+        return a.title.localeCompare(b.title, 'is');
+      }
+    }
+  });
+
+  document.getElementById('shows-grid').innerHTML = shows.map(s => cardHtml(s)).join('');
+}
+
+/* CARD */
+function cardHtml(show) {
+  const hasMissing = show.missingEpisodes?.length > 0;
+  const hasUpcoming = !!show.nextEpisode;
+  const idx = allShows.indexOf(show);
+
+  const posterUrl = show.tmdbPoster || (show.thumb ? `${plexUrl}${show.thumb}?X-Plex-Token=${plexToken}` : null);
+  const backdropUrl = show.tmdbBackdrop || (show.art ? `${plexUrl}${show.art}?X-Plex-Token=${plexToken}` : null);
+
+  let cls = 'show-card';
+  if (hasMissing) cls += ' has-missing';
+  else if (hasUpcoming) cls += ' has-upcoming';
+
+  const bannerHtml = backdropUrl
+    ? `<img class="card-banner-img" src="${backdropUrl}" loading="lazy" onerror="this.style.display='none'" alt="">`
+    : `<div style="width:100%;height:100%;background:linear-gradient(135deg,var(--surface),var(--bg))"></div>`;
+
+  const posterHtml = posterUrl
+    ? `<img class="card-poster" src="${posterUrl}" loading="lazy" onerror="this.outerHTML='<div class=card-poster-ph>📺</div>'" alt="">`
+    : `<div class="card-poster-ph">📺</div>`;
+
+  const sBadge = statusBadge(show.status);
+  const mBadge = hasMissing ? `<span class="badge missing">⚠ Vantar ${show.missingEpisodes.length}</span>` : '';
+  const uBadge = hasUpcoming ? `<span class="badge upcoming">▶ Bráðum</span>` : '';
+  const cBadge = !hasMissing && show.status==='Ended' ? `<span class="badge complete">✓ Komplít</span>` : '';
+
+  const bars = (show.seasonRows||[]).slice(0,6).map(row => {
+    const pct = row.total > 0 ? (row.have/row.total)*100 : 100;
+    const fc = pct>=100?'full':pct===0?'empty':'partial';
+    return `<div class="sbar">
+      <div class="sbar-label">S${row.season}</div>
+      <div class="sbar-track"><div class="sbar-fill ${fc}" style="width:${Math.max(pct,2)}%"></div></div>
+      <div class="sbar-count">${row.have}/${row.total}</div>
+    </div>`;
+  }).join('');
+  const moreSeasons = show.seasonRows?.length > 6
+    ? `<div style="font-size:0.62rem;color:var(--muted);padding:0 1rem 0.4rem">+${show.seasonRows.length-6} seríur til viðbótar</div>` : '';
+
+  let upPill = '';
+  if (hasUpcoming) {
+    const ne = show.nextEpisode;
+    const code = `S${String(ne.season_number||0).padStart(2,'0')}E${String(ne.episode_number||0).padStart(2,'0')}`;
+    const dl = ne.air_date ? Math.ceil((new Date(ne.air_date)-new Date())/86400000) : null;
+    const ds = dl !== null ? (dl<=0?'Í dag':dl===1?'Á morgun':`${dl} dagar`) : '';
+    upPill = `<div class="up-pill"><span class="upc">${code}</span><span class="upn">${ne.name||'—'}</span><span class="upd">${ds}</span></div>`;
+  }
+
+  let missPill = '';
+  if (hasMissing) {
+    const cnt = show.missingEpisodes.length;
+    missPill = `<div class="miss-pill">⚠ ${cnt} þáttur vantar á Plex</div>`;
+  }
+
+  const metaParts = [show.year, show.network, show.rating ? '★ '+show.rating : ''].filter(Boolean).join(' · ');
+
+  return `<div class="${cls}" onclick="openModal(${idx})">
+    <div class="card-banner">
+      ${bannerHtml}
+      <div class="card-banner-grad"></div>
+      ${posterHtml}
+      <div class="banner-badges">${sBadge}${mBadge}${uBadge}${cBadge}</div>
+    </div>
+    <div class="card-body">
+      <div class="card-title" title="${show.title}">${show.title}</div>
+      <div class="card-meta">${metaParts}</div>
+    </div>
+    <div class="season-bars">${bars}</div>
+    ${moreSeasons}
+    ${upPill}
+    ${missPill}
+  </div>`;
+}
+
+/* MODAL */
+function openModal(idx) {
+  const show = allShows[idx];
+  if (!show) return;
+
+  const posterUrl = show.tmdbPoster || (show.thumb ? `${plexUrl}${show.thumb}?X-Plex-Token=${plexToken}` : null);
+  const backdropUrl = show.tmdbBackdrop || (show.art ? `${plexUrl}${show.art}?X-Plex-Token=${plexToken}` : null);
+  const hasMissing = show.missingEpisodes?.length > 0;
+  const hasUpcoming = !!show.nextEpisode;
+
+  document.getElementById('m-hero-img').src = backdropUrl || '';
+  document.getElementById('m-title').textContent = show.title;
+  document.getElementById('m-meta').textContent = [
+    show.year, show.network, show.genres?.join(', '), show.rating ? '★ '+show.rating : ''
+  ].filter(Boolean).join(' · ');
+  document.getElementById('m-poster').innerHTML = posterUrl
+    ? `<img class="modal-poster" src="${posterUrl}" onerror="this.outerHTML='<div class=modal-poster-ph>📺</div>'" alt="">`
+    : `<div class="modal-poster-ph">📺</div>`;
+
+  document.getElementById('m-badges').innerHTML = [
+    statusBadge(show.status),
+    hasMissing ? `<span class="badge missing">⚠ Vantar ${show.missingEpisodes.length} þátt</span>` : '',
+    hasUpcoming ? `<span class="badge upcoming">▶ Bráðum nýr þáttur</span>` : '',
+    !hasMissing && show.status==='Ended' ? `<span class="badge complete">✓ Komplít</span>` : '',
+  ].join('');
+
+  let body = '';
+
+  if (show.overview)
+    body += `<p style="font-size:0.78rem;color:var(--text-dim);line-height:1.75;margin-bottom:2rem">${show.overview}</p>`;
+
+  if (hasUpcoming) {
+    const ne = show.nextEpisode;
+    const code = `S${String(ne.season_number||0).padStart(2,'0')}E${String(ne.episode_number||0).padStart(2,'0')}`;
+    const airDate = ne.air_date ? new Date(ne.air_date).toLocaleDateString('is-IS',{day:'numeric',month:'long',year:'numeric'}) : '—';
+    const dl = ne.air_date ? Math.ceil((new Date(ne.air_date)-new Date())/86400000) : null;
+    const countdown = dl !== null ? (dl<=0?'Í dag / Á dögunum':dl===1?'Á morgun':`${dl} dagar eftir`) : '';
+    body += `<div class="section-head">Næsti þáttur</div>
+    <div class="nep-box">
+      <div class="nep-top">
+        <span class="nep-code">${code}</span>
+        <span class="nep-name">${ne.name||'Óþekktur þáttur'}</span>
+      </div>
+      <div class="nep-bottom">
+        <div class="nep-countdown">${countdown}</div>
+        <div class="nep-date">${airDate}</div>
+      </div>
+      ${ne.overview ? `<div class="nep-overview">${ne.overview}</div>` : ''}
+    </div>`;
+  }
+
+  if (show.seasonRows?.length) {
+    body += `<div class="section-head">Seríur</div>
+    <table class="stbl">
+      <thead><tr><th>Seríu</th><th class="stbl-bar-cell">Framvinda</th><th>Þætti</th><th class="stbl-status">Staða</th></tr></thead>
+      <tbody>${show.seasonRows.map(row => {
+        const pct = row.total > 0 ? (row.have/row.total)*100 : 100;
+        const fc = pct>=100?'full':pct===0?'empty':'partial';
+        const stEl = pct>=100
+          ? `<span class="badge complete">Klárað</span>`
+          : pct===0 ? `<span class="badge missing">Ekkert</span>`
+          : `<span class="badge missing">Vantar ${row.missing}</span>`;
+        return `<tr>
+          <td class="stbl-snum">Seríu ${row.season}</td>
+          <td class="stbl-bar-cell"><div class="stbl-bar"><div class="stbl-bar-fill ${fc}" style="width:${Math.max(pct,2)}%"></div></div></td>
+          <td class="stbl-count">${row.have} / ${row.total}</td>
+          <td class="stbl-status">${stEl}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  }
+
+  if (hasMissing) {
+    body += `<div class="section-head">Vantar þætti (${show.missingEpisodes.length})</div>
+    <div class="miss-grid">${show.missingEpisodes.map(e => `<span class="miss-chip">${e}</span>`).join('')}</div>`;
+  }
+
+  document.getElementById('m-body').innerHTML = body;
+  document.getElementById('modal-backdrop').classList.add('open');
+  document.body.classList.add('modal-open');
+}
+
+function backdropClick(e) { if (e.target === document.getElementById('modal-backdrop')) closeModal(); }
+function closeModal() {
+  document.getElementById('modal-backdrop').classList.remove('open');
+  document.body.classList.remove('modal-open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function statusBadge(s) {
+  if (s === 'Ended' || s === 'Canceled') return `<span class="badge ended">${s}</span>`;
+  if (s === 'Returning Series') return `<span class="badge cont">Í gangi</span>`;
+  if (s === 'In Production') return `<span class="badge upcoming">Í framleiðslu</span>`;
+  return s && s !== '—' ? `<span class="badge ended">${s}</span>` : '';
+}
+</script>
+</body>
+</html>
